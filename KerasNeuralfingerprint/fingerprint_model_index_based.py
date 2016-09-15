@@ -1,3 +1,16 @@
+"""
+modifications to vanilla keras:
+
+added check_batch_dim argument to model.train_on_batch(...) and is save to model
+made call to check_array_lengths() in train_on_batch() conditional on check_batch_dim
+
+
+~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~
+
+relies on tf.gather/indexing to select features of neighboring atoms
+
+"""
+
 
 import keras.optimizers as optimizers
 import keras.regularizers as regularizers
@@ -5,37 +18,39 @@ import keras.models as models
 import keras.layers as layers
 import keras.backend as backend
 
+
+
+
 degrees = range(1,5)
 
-def neural_fingerprint_layer(inputs, atom_features_of_previous_layer, num_atom_features, conv_width, fp_length, L2_reg, num_bond_features , batch_normalize = True):
-    '''
-    one layer of the "convolutional" neural-fingerprint network
+
+
+def neural_fingerprint_layer(inputs, atom_features_of_previous_layer, num_atom_features, 
+                                 conv_width, fp_length, L2_reg, num_bond_features , batch_normalize = True):
     
-    This implementation uses indexing to select the features of neighboring atoms, and binary matrices to map atoms in the batch to the indiviual molecules in the batch.
-    '''
-#    atom_features_of_previous_layer has shape: (variable_a, num_input_atom_features) [if first layer] or (variable_a, conv_width)
+#    atom_features_of_previous_layer # either (variable_a, num_input_atom_features) [first layer] or (variable_a, conv_width)
     
     activations_by_degree = []
     
     
     for degree in degrees:
         
-        atom_features_of_previous_layer_this_degree = layers.Lambda(lambda x: backend.dot(inputs['atom_features_selector_matrix_degree_'+str(degree)], x))(atom_features_of_previous_layer) # layers.Lambda(lambda x: backend.dot(inputs['atom_features_selector_matrix_degree_'+str(degree)], x))(atom_features_of_previous_layer)
+        atom_features_of_previous_layer_this_degree = backend.gather(atom_features_of_previous_layer, indices=inputs['atom_neighbors_indices_degree_'+str(degree)]).sum(1)
         
-
         merged_atom_bond_features = layers.merge([atom_features_of_previous_layer_this_degree, inputs['bond_features_degree_'+str(degree)]], mode='concat', concat_axis=1)
-
+        merged_atom_bond_features._keras_shape = (None, num_atom_features+num_bond_features) 
+        
         activations = layers.Dense(conv_width, activation='linear', bias=False)(merged_atom_bond_features)
-
         activations_by_degree.append(activations)
 
     # skip-connection to output/final fingerprint
     output_to_fingerprint_tmp = layers.Dense(fp_length, activation='softmax')(atom_features_of_previous_layer) # (variable_a, fp_length)
-    #(variable_a, fp_length)
+
     output_to_fingerprint     = layers.Lambda(lambda x: backend.dot(inputs['atom_batch_matching_matrix_degree_'+str(degree)], x))(output_to_fingerprint_tmp)  # layers.Lambda(lambda x: backend.dot(inputs['atom_batch_matching_matrix_degree_'+str(degree)], x))(output_to_fingerprint_tmp) # (batch_size, fp_length)
 
     # connect to next layer
     this_activations_tmp = layers.Dense(conv_width, activation='linear')(atom_features_of_previous_layer) # (variable_a, conv_width)
+
     # (variable_a, conv_width)
     merged_neighbor_activations = layers.merge(activations_by_degree, mode='concat',concat_axis=0)
 
@@ -73,7 +88,9 @@ def build_fingerprint_regression_model(fp_length = 50, fp_depth = 4, conv_width 
     for degree in degrees:
         inputs['bond_features_degree_'+str(degree)] = layers.Input(name='bond_features_degree_'+str(degree), 
                                                             shape=(num_bond_features,))
-        inputs['atom_features_selector_matrix_degree_'+str(degree)] = layers.Input(name='atom_features_selector_matrix_degree_'+str(degree), shape=(None,)) #todo shape
+        inputs['atom_neighbors_indices_degree_'+str(degree)] = layers.Input(name='atom_neighbors_indices_degree_'+str(degree), shape=(degree,), dtype = 'int32') #todo shape
+        
+#        inputs['input_atom_features_degree_'+str(degree)] = layers.Input(name='input_atom_features_degree_'+str(degree), shape=(num_input_atom_features,))
         
         inputs['atom_batch_matching_matrix_degree_'+str(degree)] = layers.Input(name='atom_batch_matching_matrix_degree_'+str(degree), shape=(None,)) # shape is (batch_size, variable_a)
     
@@ -93,14 +110,14 @@ def build_fingerprint_regression_model(fp_length = 50, fp_depth = 4, conv_width 
             num_atom_features = conv_width
             all_outputs_to_fingerprint.append(output_to_fingerprint)
         
-        # This is the actual fingerprint, we will feed it into an MLP for prediction  -- shape is (batch_size, fp_length)
+        # THIS is the actual fingerprint, we will feed it into an MLP for prediction  -- shape is (batch_size, fp_length)
         neural_fingerprint = layers.merge(all_outputs_to_fingerprint, mode='sum') if len(all_outputs_to_fingerprint)>1 else all_outputs_to_fingerprint
 
     
     Prediction_MLP_layer = neural_fingerprint
     
     for i, hidden in enumerate(predictor_MLP_layers):
-
+#        Prediction_Dropout_layer = Dropout(0.3)(Prediction_MLP_layer_prev)
         Prediction_MLP_layer = layers.Dense(hidden, activation='relu', W_regularizer=regularizers.l2(L2_reg), name='top_MLP_hidden_'+str(i))(Prediction_MLP_layer)
         
 

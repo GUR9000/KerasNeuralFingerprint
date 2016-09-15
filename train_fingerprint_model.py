@@ -6,6 +6,7 @@ Performs early-stopping on the validation set.
 The model is specified inside the main() function, which is a demonstration of this code-base
 
 """
+from __future__ import print_function
 
 import time
 import numpy as np
@@ -13,12 +14,9 @@ import numpy as np
 import keras.backend as backend
 
 import KerasNeuralfingerprint.utils as utils
-
-import KerasNeuralfingerprint.data_preprocessing__matrix_based as data_preprocessing__matrix_based
+import KerasNeuralfingerprint.data_preprocessing as data_preprocessing
 import KerasNeuralfingerprint.fingerprint_model_matrix_based as fingerprint_model_matrix_based
-
-#import KerasNeuralfingerprint.data_preprocessing__index_based as data_preprocessing__index_based
-#import KerasNeuralfingerprint.fingerprint_model_index_based as fingerprint_model_index_based
+import KerasNeuralfingerprint.fingerprint_model_index_based as fingerprint_model_index_based
 
 
 
@@ -93,7 +91,7 @@ def train_model(model, train_data, valid_data, test_data,
 
     if train:
         if verbose>0:
-            print 'starting training (compiling)...'
+            print('starting training (compiling)...')
         
         best_valid = 9e9
         model_params_at_best_valid=[]
@@ -113,10 +111,10 @@ def train_model(model, train_data, valid_data, test_data,
                 best_valid = val_mse
                 model_params_at_best_valid = get_model_params(model)
             if verbose>0:
-                print 'Epoch',epoch+1,'completed with average loss',np.mean(losses)
+                print('Epoch',epoch+1,'completed with average loss',np.mean(losses))
             
         # excludes times[0] as it includes compilation time
-        print 'Training @',1./np.mean(times[1:]),'epochs/sec (',batchsize*len(train_data)/np.mean(times[1:]),'examples/s)'
+        print('Training @',1./np.mean(times[1:]),'epochs/sec (',batchsize*len(train_data)/np.mean(times[1:]),'examples/s)')
     test_on(train_data,model,'train score (final):')
     test_on(valid_data,model,'validation score (final):')
     test_on(test_data, model,'test  score (final):')
@@ -139,7 +137,7 @@ def train_model(model, train_data, valid_data, test_data,
     
 def main(use_matrix_based_implementation = False):
     """
-    Demo of data preprocessing, network configuration and (cross-validation) Training & testing
+    Demonstration of data preprocessing, network configuration and (cross-validation) Training & testing
     
     There are two different (but equivalent!) implementations of neural-fingerprints, 
     which can be selected with the binary parameter <use_matrix_based_implementation>
@@ -148,16 +146,20 @@ def main(use_matrix_based_implementation = False):
     # for reproducibility
     np.random.seed(1338)  
 
-    n_hidden_units = 100
-
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~
     num_epochs = 100
-    batchsize = 20
-    fp_length = 50
-    conv_width = 50
-    fp_depth = 3
-    predictor_MLP_layers = [n_hidden_units, n_hidden_units, n_hidden_units]
+    batchsize = 20 #20
     L2_reg = 4e-3
     batch_normalize = 0
+    #~~~~~~~~~~~~~~~~~~~~~~~~~
+    fp_length = 50  # size of the final constructed fingerprint vector
+    conv_width = 50 # number of filters per fingerprint layer
+    fp_depth = 3    # number of convolutional fingerprint layers
+    #~~~~~~~~~~~~~~~~~~~~~~~~~
+    n_hidden_units = 100
+    predictor_MLP_layers = [n_hidden_units, n_hidden_units, n_hidden_units]    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~
     
     
     # total number of cross-validation splits to perform
@@ -165,7 +167,7 @@ def main(use_matrix_based_implementation = False):
     
     
     # select the data that will be loaded or provide different data 
-    data, labels = utils.load_delaney()
+    data, labels = utils.filter_data(utils.load_delaney, data_cache_name='data/delaney')
 #    data, labels = utils.filter_data(utils.load_Karthikeyan_MeltingPoints, data_cache_name='data/Karthikeyan_MeltingPoints')
     
     
@@ -185,27 +187,24 @@ def main(use_matrix_based_implementation = False):
     test_mse  = []
     
     if use_matrix_based_implementation:
-        fn_preprocessing = data_preprocessing__matrix_based.preprocess_data_set_for_Model
         fn_build_model   = fingerprint_model_matrix_based.build_fingerprint_regression_model
     else:
-        raise NotImplementedError('coming soon')
-        #fn_preprocessing = data_preprocessing__index_based.preprocess_data_set_for_Model
-        #fn_build_model   = fingerprint_model_index_based.build_fingerprint_regression_model
+        fn_build_model   = fingerprint_model_index_based.build_fingerprint_regression_model
     
     
-    print 'Naive baseline (using mean): MSE =', np.mean((labels-labels.mean())**2), '(RMSE =', np.sqrt(np.mean((labels-labels.mean())**2)),')'
+    print('Naive baseline (using mean): MSE =', np.mean((labels-labels.mean())**2), '(RMSE =', np.sqrt(np.mean((labels-labels.mean())**2)),')')
    
     
     
     for crossval_split_index in range(crossval_total_num_splits):
-        print '\ncrossvalidation split',crossval_split_index+1,'of',crossval_total_num_splits
+        print('\ncrossvalidation split',crossval_split_index+1,'of',crossval_total_num_splits)
     
         traindata, valdata, testdata = utils.cross_validation_split(data, labels, crossval_split_index=crossval_split_index, 
                                                                     crossval_total_num_splits=crossval_total_num_splits, 
                                                                     validation_data_ratio=0.1)
         
         
-        train, valid_data, test_data = fn_preprocessing(traindata, valdata, testdata, 
+        train, valid_data, test_data = data_preprocessing.preprocess_data_set_for_Model(traindata, valdata, testdata, 
                                                                      training_batchsize = batchsize, 
                                                                      testset_batchsize = 1000)
         
@@ -222,14 +221,13 @@ def main(use_matrix_based_implementation = False):
         val_mse.append(val_mse_best)
         test_mse.append(test_mse_at_valbest)
 
-    print
-    print
-    print 'Crossvalidation complete!'
-    print
-    print 'Mean training_data MSE =', np.mean(train_mse), '+-', np.std(train_mse)/np.sqrt(crossval_total_num_splits)
-    print 'Mean validation    MSE =', np.mean(val_mse), '+-', np.std(val_mse)/np.sqrt(crossval_total_num_splits)
-    print 'Mean test_data     MSE =', np.mean(test_mse), '+-', np.std(test_mse)/np.sqrt(crossval_total_num_splits)
-    print 'Mean test_data RMSE    =', np.mean(np.sqrt(np.array(test_mse))), '+-', np.std(np.sqrt(np.array(test_mse)))/np.sqrt(crossval_total_num_splits)
+    
+    print('\n\nCrossvalidation complete!\n')
+    
+    print('Mean training_data MSE =', np.mean(train_mse), '+-', np.std(train_mse)/np.sqrt(crossval_total_num_splits))
+    print('Mean validation    MSE =', np.mean(val_mse), '+-', np.std(val_mse)/np.sqrt(crossval_total_num_splits))
+    print('Mean test_data     MSE =', np.mean(test_mse), '+-', np.std(test_mse)/np.sqrt(crossval_total_num_splits))
+    print('Mean test_data RMSE    =', np.mean(np.sqrt(np.array(test_mse))), '+-', np.std(np.sqrt(np.array(test_mse)))/np.sqrt(crossval_total_num_splits))
 
     
     
@@ -241,6 +239,7 @@ if __name__=='__main__':
     
     
     main(1)
+    
 
 
 

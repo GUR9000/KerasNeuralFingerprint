@@ -1,7 +1,7 @@
 import utils
 import numpy as np
 
-
+degrees = range(1,5)
 
 def connectivity_to_Matrix_list(list_of_neighbors_lists, total_num_features):
     """
@@ -55,7 +55,7 @@ def extract_bondfeatures_of_neighbors_by_degree(array_rep):
     
     """
     bond_features_by_atom_by_degree = []
-    for degree in range(6):
+    for degree in range(max(degrees)+1):
         bond_features = array_rep['bond_features']
         bond_neighbors_list = array_rep[('bond_neighbors', degree)]
         summed_bond_neighbors = bond_features[bond_neighbors_list].sum(axis=1)
@@ -65,12 +65,14 @@ def extract_bondfeatures_of_neighbors_by_degree(array_rep):
 
 
 
-def preprocess_data_for_GDNN(smiles, labels, batchsize = 100):
+def _preprocess_data(smiles, labels, batchsize = 100):
     """
     prepares all input batches to train/test the GDNN fingerprints implementation
     """
     N = len(smiles)
     batches = []
+    
+    num_bond_features = 6
     
     for i in range(int(np.ceil(N*1./batchsize))):
         array_rep = utils.array_rep_from_smiles(smiles[i*batchsize:min(N,(i+1)*batchsize)])
@@ -78,16 +80,17 @@ def preprocess_data_for_GDNN(smiles, labels, batchsize = 100):
         atom_features = array_rep['atom_features']
 
         summed_bond_features_by_degree = extract_bondfeatures_of_neighbors_by_degree(array_rep)
-        
-        batch_dict = {'input_atom_features':atom_features}
+
+        batch_dict = {'input_atom_features':atom_features} # (num_atoms, num_atom_features)
+
         missing_degrees = []
-        for degree in range(0,5):
+        for degree in degrees:
         
             atom_neighbors_list = array_rep[('atom_neighbors', degree)]
             if len(atom_neighbors_list)==0:
                 missing_degrees.append(degree)
                 continue
-
+            
             # this matrix is used by every layer to match and sum all neighboring updated atom features to the atoms
             atom_neighbor_matching_matrix = connectivity_to_Matrix(atom_neighbors_list, atom_features.shape[0])
             atom_batch_matching_matrix = connectivity_to_Matrix(array_rep['atom_list'], atom_features.shape[0]).T
@@ -97,35 +100,31 @@ def preprocess_data_for_GDNN(smiles, labels, batchsize = 100):
 
             
             batch_dict['bond_features_degree_'+str(degree)] = summed_bond_features_by_degree[degree]/4. - 0.25
-            batch_dict['atom_features_selector_matrix_degree_'+str(degree)] = atom_neighbor_matching_matrix
-            batch_dict['atom_batch_matching_matrix_degree_'+str(degree)] = atom_batch_matching_matrix.T
 
-#             example:
-#            degree==1
-#            summed_bond_features (362L, 6L)
-#            atom_neighbor_matching_matrix (362L, 1323L)
-#            initial_neighboring_summed_atoms_features (362L, 62L)
-#            
-#            degree==2
-#            summed_bond_features (569L, 6L)
-#            atom_neighbor_matching_matrix (569L, 1323L)
-#            initial_neighboring_summed_atoms_features (569L, 62L)
-#            
-#            degree==3
-#            summed_bond_features (352L, 6L)
-#            atom_neighbor_matching_matrix (352L, 1323L)
-#            initial_neighboring_summed_atoms_features (352L, 62L)
-#            
-#            degree==4
-#            summed_bond_features (40L, 6L)
-#            atom_neighbor_matching_matrix (40L, 1323L)
-#            initial_neighboring_summed_atoms_features (40L, 62L)
-#            
-#             with 362 + 569 + 352 + 40 == 1323 (number of atoms in this batch)
+            batch_dict['atom_neighbors_indices_degree_'+str(degree)] = atom_neighbors_list
+            batch_dict['atom_features_selector_matrix_degree_'+str(degree)] = atom_neighbor_matching_matrix
+            batch_dict['atom_batch_matching_matrix_degree_'+str(degree)] = atom_batch_matching_matrix.T # (batchsize, num_atoms)
             
+            if degree==0:
+                print 'degree 0 bond?'
+                print smiles[i*batchsize:min(N,(i+1)*batchsize)]
+                return
+                
+#            input_atom_features (292L, 62L)
+#            bond_features_degree_ 1 (70L, 6L)
+#            atom_neighbors_indices_degree_ 1 (70L, 1L)
+#            bond_features_degree_ 2 (134L, 6L)
+#            atom_neighbors_indices_degree_ 2 (134L, 2L)
+#            bond_features_degree_ 3 (78L, 6L)
+#            atom_neighbors_indices_degree_ 3 (78L, 3L)
+#            bond_features_degree_ 4 (10L, 6L)
+#            atom_neighbors_indices_degree_ 4 (10L, 4L)
+            num_bond_features = batch_dict['bond_features_degree_'+str(degree)].shape[1]
+            num_atoms = atom_neighbor_matching_matrix.shape[1]
         for missing_degree in missing_degrees:
-            batch_dict['bond_features_degree_'+str(missing_degree)] = np.zeros((0, summed_bond_features_by_degree[1].shape[1]),'float32')
-            batch_dict['atom_features_selector_matrix_degree_'+str(missing_degree)] = np.zeros((0, atom_neighbor_matching_matrix.shape[1]),'float32') 
+            batch_dict['atom_neighbors_indices_degree_'+str(missing_degree)] = np.zeros((0, missing_degree),'int32')
+            batch_dict['bond_features_degree_'+str(missing_degree)] = np.zeros((0, num_bond_features),'float32')
+            batch_dict['atom_features_selector_matrix_degree_'+str(missing_degree)] = np.zeros((0, num_atoms),'float32') 
             batch_dict['atom_batch_matching_matrix_degree_'+str(missing_degree)] = atom_batch_matching_matrix.T
         batches.append((batch_dict,labels_b))
     return batches
@@ -136,9 +135,9 @@ def preprocess_data_for_GDNN(smiles, labels, batchsize = 100):
 
 def preprocess_data_set_for_Model(traindata, valdata, testdata, training_batchsize = 50, testset_batchsize = 1000):
     
-    train = preprocess_data_for_GDNN(traindata[0], traindata[1], training_batchsize)
-    validation = preprocess_data_for_GDNN(valdata[0],  valdata[1],  testset_batchsize )
-    test = preprocess_data_for_GDNN(testdata[0], testdata[1], testset_batchsize )
+    train = _preprocess_data(traindata[0], traindata[1], training_batchsize)
+    validation = _preprocess_data(valdata[0],  valdata[1],  testset_batchsize )
+    test = _preprocess_data(testdata[0], testdata[1], testset_batchsize )
     
     return train, validation, test
 
@@ -169,7 +168,7 @@ if __name__=='__main__':
                                                                 crossval_total_num_splits=10, 
                                                                 validation_data_ratio=0.1)
     
-    preprocess_data_set_for_GDNN(traindata, valdata, testdata, training_batchsize = 50, test_batchsize = 1000)
+    preprocess_data_set(traindata, valdata, testdata, training_batchsize = 50, test_batchsize = 1000)
 
 
 

@@ -480,6 +480,7 @@ class Layer(object):
                                     'and thus cannot be built. '
                                     'You can build it manually via: '
                                     '`layer.build(batch_input_shape)`')
+            
             if len(input_shapes) == 1:
                 self.build(input_shapes[0])
             else:

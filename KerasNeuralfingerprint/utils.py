@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import csv
 import numpy as np
 import itertools as it
@@ -157,7 +159,7 @@ def filter_data(data_loading_function, data_cache_name = 'default_cache'):
                 ok +=1
             except:
                 banned +=1
-        print 'removed', banned, 'and kept', ok,'samples'
+        print('removed', banned, 'and kept', ok,'samples')
         data = np.array(data)
         labels = np.array(labels)
         
