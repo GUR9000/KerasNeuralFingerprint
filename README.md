@@ -1,6 +1,7 @@
-Keras-based implementation of neural fingerprints, operating on molecular graphs (SMILES) of arbitrary size.
+Keras-based implementation of neural fingerprints
 ============================================================================================================
 
+A convolutional neural network operating on molecular graphs (SMILES) of arbitrary size for chemical property prediction (e.g. solubility).
 
 
 ## Requirements:
