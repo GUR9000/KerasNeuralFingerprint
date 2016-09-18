@@ -137,7 +137,8 @@ def update_lr(model, initial_lr, relative_progress, total_lr_decay):
     relative_progress: value in [0, 1] -- current position in training, where 0 == beginning, 1==end of training and a linear interpolation in-between
     """
     assert total_lr_decay > 0 and total_lr_decay <= 1
-    model.optimizer.lr.set_value(initial_lr * total_lr_decay**(relative_progress))
+    backend.set_value(model.optimizer.lr, initial_lr * total_lr_decay**(relative_progress))
+    
     
 
 
