@@ -138,15 +138,30 @@ def array_rep_from_smiles(smiles):
 
 
 
-def filter_data(data_loading_function, data_cache_name = 'default_cache'):
+def filter_data(data_loading_function, data_cache_name = 'default_data_cache/'):
     """
     loads data using <data_loading_function> (e.g. load_Karthikeyan_MeltingPoints()) and filters out all invalid SMILES.
     Saves the processed data on disk (name is specified by <data_cache_name>) and will re-load this file 
     the next time filter_data() is called if the same <data_cache_name> is provided
+    
+    Inputs:
+    ---------
+    
+        data_loading_function:
+        
+            a function returning two lists: a list of smiles(input data) and a list of labels/regression targets
+        
+        
+        data_cache_name:
+        
+            string describing the location for storing the filtered data on disk. 
+            
+            Set to None in order to disable this.
     """
-    try:
-        data   = np.load(data_cache_name+'_data.npy')        
-        labels = np.load(data_cache_name+'_labels.npy')
+    try: #try to load cached files
+        if data_cache_name is not None:
+            data   = np.load(data_cache_name+'_data.npy')        
+            labels = np.load(data_cache_name+'_labels.npy')
     except:
         data_, labels_ = data_loading_function()# e.g. load_Karthikeyan_MeltingPoints()
         data, labels = [ ],[]
@@ -159,12 +174,14 @@ def filter_data(data_loading_function, data_cache_name = 'default_cache'):
                 ok +=1
             except:
                 banned +=1
-        print('removed', banned, 'and kept', ok,'samples')
+        if data_cache_name is not None:
+            print('removed', banned, 'and kept', ok,'samples')
         data = np.array(data)
         labels = np.array(labels)
         
-        np.save(data_cache_name+'_data.npy', data)
-        np.save(data_cache_name+'_labels.npy', labels)
+        if data_cache_name is not None:
+            np.save(data_cache_name+'_data.npy', data)
+            np.save(data_cache_name+'_labels.npy', labels)
     return data, labels
         
 

@@ -5,7 +5,7 @@ import numpy as np
 from rdkit.Chem import MolFromSmiles
 
 
-import numpy as np #import autograd.numpy as np
+import numpy as np
 from rdkit import Chem
 
 
