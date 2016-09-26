@@ -41,7 +41,8 @@ def neural_fingerprint_layer(inputs, atom_features_of_previous_layer, num_atom_f
         merged_atom_bond_features = layers.merge([atom_features_of_previous_layer_this_degree, inputs['bond_features_degree_'+str(degree)]], mode='concat', concat_axis=1)
         merged_atom_bond_features._keras_shape = (None, num_atom_features+num_bond_features) 
         
-        activations = layers.Dense(conv_width, activation='linear', bias=False, name='activations_{}_degree_{}'.format(layer_index, degree))(merged_atom_bond_features)
+        activations = layers.Dense(conv_width, activation='relu', bias=False, name='activations_{}_degree_{}'.format(layer_index, degree))(merged_atom_bond_features)
+
         activations_by_degree.append(activations)
 
     # skip-connection to output/final fingerprint
@@ -50,17 +51,16 @@ def neural_fingerprint_layer(inputs, atom_features_of_previous_layer, num_atom_f
     output_to_fingerprint     = layers.Lambda(lambda x: backend.dot(inputs['atom_batch_matching_matrix_degree_'+str(degree)], x))(output_to_fingerprint_tmp)  # layers.Lambda(lambda x: backend.dot(inputs['atom_batch_matching_matrix_degree_'+str(degree)], x))(output_to_fingerprint_tmp) # (batch_size, fp_length)
 
     # connect to next layer
-    this_activations_tmp = layers.Dense(conv_width, activation='linear', name='layer_{}_activations'.format(layer_index))(atom_features_of_previous_layer) # (variable_a, conv_width)
+    this_activations_tmp = layers.Dense(conv_width, activation='relu', name='layer_{}_activations'.format(layer_index))(atom_features_of_previous_layer) # (variable_a, conv_width)
+
 
     # (variable_a, conv_width)
     merged_neighbor_activations = layers.merge(activations_by_degree, mode='concat',concat_axis=0)
 
-    new_atom_features_tmp = layers.Lambda(lambda x:merged_neighbor_activations + x)(this_activations_tmp ) #(variable_a, conv_width)
+    new_atom_features = layers.Lambda(lambda x:merged_neighbor_activations + x)(this_activations_tmp ) #(variable_a, conv_width)
     if batch_normalization:
-        new_atom_features_tmp = layers.normalization.BatchNormalization()(new_atom_features_tmp)
+        new_atom_features = layers.normalization.BatchNormalization()(new_atom_features)
 
-    new_atom_features = layers.Lambda(backend.relu)(new_atom_features_tmp) #(variable_a, conv_width)
-    
     return new_atom_features, output_to_fingerprint
 
 
@@ -119,7 +119,6 @@ def build_fingerprint_regression_model(fp_length = 50, fp_depth = 4, conv_width 
     Prediction_MLP_layer = neural_fingerprint
     
     for i, hidden in enumerate(predictor_MLP_layers):
-#        Prediction_Dropout_layer = Dropout(0.3)(Prediction_MLP_layer_prev)
         Prediction_MLP_layer = layers.Dense(hidden, activation='relu', W_regularizer=regularizers.l2(L2_reg), name='MLP_hidden_'+str(i))(Prediction_MLP_layer)
         
 

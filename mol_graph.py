@@ -21,6 +21,9 @@ def one_of_k_encoding_unk(x, allowable_set):
         x = allowable_set[-1]
     return map(lambda s: x == s, allowable_set)
 
+
+
+
 def atom_features(atom):
     return np.array(one_of_k_encoding_unk(atom.GetSymbol(),
                                       ['C', 'N', 'O', 'S', 'F', 'Si', 'P', 'Cl', 'Br', 'Mg', 'Na',
@@ -32,6 +35,9 @@ def atom_features(atom):
                     one_of_k_encoding_unk(atom.GetTotalNumHs(), [0, 1, 2, 3, 4]) +
                     one_of_k_encoding_unk(atom.GetImplicitValence(), [0, 1, 2, 3, 4, 5]) +
                     [atom.GetIsAromatic()])
+
+
+
 
 def bond_features(bond):
     bt = bond.GetBondType()
@@ -108,6 +114,7 @@ class Node(object):
         self._neighbors = []
         self.rdkit_ix = rdkit_ix
 
+
     def add_neighbors(self, neighbor_list):
         for neighbor in neighbor_list:
             self._neighbors.append(neighbor)
@@ -115,6 +122,7 @@ class Node(object):
 
     def get_neighbors(self, ntype):
         return [n for n in self._neighbors if n.ntype == ntype]
+
 
 def graph_from_smiles_tuple(smiles_tuple):
     graph_list = [graph_from_smiles(s) for s in smiles_tuple]
@@ -126,17 +134,21 @@ def graph_from_smiles_tuple(smiles_tuple):
     big_graph.sort_nodes_by_degree('atom')
     return big_graph
 
+
 def graph_from_smiles(smiles):
+#    print ('graph_from_smiles::',smiles)
     graph = MolGraph()
     mol = MolFromSmiles(smiles)
     if not mol:
         raise ValueError("Could not parse SMILES string:", smiles)
     atoms_by_rd_idx = {}
     for atom in mol.GetAtoms():
+        #print(atom.GetSymbol(), 'deg', atom.GetDegree(), '#H',atom.GetTotalNumHs(),'valence', atom.GetImplicitValence(), 'Idx()',atom.GetIdx())
         new_atom_node = graph.new_node('atom', features=atom_features(atom), rdkit_ix=atom.GetIdx())
         atoms_by_rd_idx[atom.GetIdx()] = new_atom_node
 
     for bond in mol.GetBonds():
+        #print('bond.GetBeginAtom()--bond.GetBeginAtom():', bond.GetBeginAtom().GetIdx(), bond.GetEndAtom().GetIdx(), 'type',str(bond.GetBondType()).split('.')[-1],'conjugated', bond.GetIsConjugated(), 'ring',bond.IsInRing())
         atom1_node = atoms_by_rd_idx[bond.GetBeginAtom().GetIdx()]
         atom2_node = atoms_by_rd_idx[bond.GetEndAtom().GetIdx()]
         new_bond_node = graph.new_node('bond', features=bond_features(bond))

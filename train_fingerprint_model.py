@@ -24,7 +24,6 @@ import KerasNeuralfingerprint.fingerprint_model_index_based as fingerprint_model
 from matplotlib import pyplot
 
 
-#np.set_printoptions(precision=5)
 
 def lim(float, precision = 5):
     return ("{0:."+str(precision)+"f}").format(float)
@@ -235,8 +234,11 @@ def train_model(model, train_data, valid_data, test_data,
 def plot_training_mse_evolution(data_lists, legend_names=[], ylabel = 'MSE', xlabel = 'training epoch', legend_location='best'):
     
     _colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
-    
-    figure = pyplot.figure()
+    try:
+        figure = pyplot.figure()
+    except:
+        print('plot_training_mse_evolution:: Error: Cannot create figure')
+        return
     ax  = figure.add_subplot(111)
     ax.set_axisbelow(True)
     if len(legend_names):
@@ -272,7 +274,7 @@ def crossvalidation_example(use_matrix_based_implementation = False, plot_traini
     
     
     #~~~~~~~~~~~~~~~~~~~~~~~~~
-    num_epochs = 150
+    num_epochs = 170
     batchsize  = 20   #batch size for training
     L2_reg     = 4e-3
     batch_normalization = 0
@@ -309,7 +311,7 @@ def crossvalidation_example(use_matrix_based_implementation = False, plot_traini
     
     
     print('Naive baseline (using mean): MSE =', lim(np.mean((labels-labels.mean())**2)), '(RMSE =', lim(np.sqrt(np.mean((labels-labels.mean())**2))),')')
-   
+    
     
     
     for crossval_split_index in range(crossval_total_num_splits):
@@ -376,10 +378,10 @@ def crossvalidation_example(use_matrix_based_implementation = False, plot_traini
 if __name__=='__main__':
     
     
-    plot_training_mse = 1
+    plot_training_mse = 0
     
     
-    model = crossvalidation_example(1, plot_training_mse = plot_training_mse)
+    model = crossvalidation_example(use_matrix_based_implementation=0, plot_training_mse = plot_training_mse)
     
     
     # to save the model weights use e.g.:
@@ -395,3 +397,6 @@ if __name__=='__main__':
 
 
     pyplot.show()
+
+
+
