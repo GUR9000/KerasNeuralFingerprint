@@ -36,7 +36,7 @@ def neural_fingerprint_layer(inputs, atom_features_of_previous_layer, num_atom_f
     
     for degree in degrees:
         
-        atom_features_of_previous_layer_this_degree = backend.gather(atom_features_of_previous_layer, indices=inputs['atom_neighbors_indices_degree_'+str(degree)]).sum(1)
+        atom_features_of_previous_layer_this_degree = backend.sum(backend.gather(atom_features_of_previous_layer, indices=inputs['atom_neighbors_indices_degree_'+str(degree)]), 1)
         
         merged_atom_bond_features = layers.merge([atom_features_of_previous_layer_this_degree, inputs['bond_features_degree_'+str(degree)]], mode='concat', concat_axis=1)
         merged_atom_bond_features._keras_shape = (None, num_atom_features+num_bond_features) 

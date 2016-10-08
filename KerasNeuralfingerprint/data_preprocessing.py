@@ -99,7 +99,7 @@ def _preprocess_data(smiles, labels, batchsize = 100):
             assert np.all(atom_batch_matching_matrix.sum(0).mean()>1),'Error: looks like a single-atom molecule?'
 
             
-            batch_dict['bond_features_degree_'+str(degree)] = summed_bond_features_by_degree[degree]#/4. - 0.25
+            batch_dict['bond_features_degree_'+str(degree)] = summed_bond_features_by_degree[degree]
 
             batch_dict['atom_neighbors_indices_degree_'+str(degree)] = atom_neighbors_list
             batch_dict['atom_features_selector_matrix_degree_'+str(degree)] = atom_neighbor_matching_matrix

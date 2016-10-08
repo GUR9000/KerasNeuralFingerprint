@@ -79,6 +79,23 @@ def eval_metrics_on(predictions, labels):
             'explained_variance_score':explained_variance_score}
 
 
+def parity_plot(predictions, labels):
+    try:
+        figure = pyplot.figure()
+    except:
+        print('parity_plot:: Error: Cannot create figure')
+        return
+    ax  = figure.add_subplot(111)
+    ax.set_axisbelow(True)
+    
+    ax.set_xlabel('True Value', fontsize=15)
+    ax.set_ylabel('Predicted', fontsize=15)
+    pyplot.grid(b=True, which='major', color='lightgray', linestyle='--')
+    pyplot.title('Parity Plot')
+    pyplot.scatter(labels, predictions, s=15, c='b', marker='o')
+    
+    
+
 
 def test_on(data, model, description='test_data score:'):
     '''
@@ -208,22 +225,23 @@ def train_model(model, train_data, valid_data, test_data,
         print('Training @',lim(1./np.mean(times[1:])),'epochs/sec (',lim(batchsize*len(train_data)/np.mean(times[1:])),'examples/s)')
     
     
-    train_end  = test_on(train_data,model,'train mse (final):     ')
-    val_end    = test_on(valid_data,model,'validation mse (final):')
-    test_end   = test_on(test_data, model,'test  mse (final):     ')
+    #train_end  = test_on(train_data,model,'train mse (final):     ')
+    #val_end    = test_on(valid_data,model,'validation mse (final):')
+    #test_end   = test_on(test_data, model,'test  mse (final):     ')
     
     set_model_params(model, model_params_at_best_valid)
     
     training_data_scores   = eval_metrics_on(predict(train_data,model), train_data)
     validation_data_scores = eval_metrics_on(predict(valid_data,model), valid_data)
-    test_data_scores       = eval_metrics_on(predict(test_data,model),  test_data)
+    test_predictions = predict(test_data,model)
+    test_data_scores       = eval_metrics_on(test_predictions, test_data)
     
     
     print('training set mse (best_val):  ', lim(training_data_scores['mse']))
     print('validation set mse (best_val):', lim(validation_data_scores['mse']))
     print('test set mse (best_val):      ', lim(test_data_scores['mse']))
     
-    return model, (training_data_scores, validation_data_scores, test_data_scores), (log_train_mse, log_validation_mse)
+    return model, (training_data_scores, validation_data_scores, test_data_scores), (log_train_mse, log_validation_mse), test_predictions
 
 
 
@@ -289,7 +307,7 @@ def crossvalidation_example(use_matrix_based_implementation = False, plot_traini
     
     
     # total number of cross-validation splits to perform
-    crossval_total_num_splits = 10
+    crossval_total_num_splits = 3#10
     
     
     # select the data that will be loaded or provide different data 
@@ -303,6 +321,8 @@ def crossvalidation_example(use_matrix_based_implementation = False, plot_traini
     val_mse   = []
     test_mse  = []
     test_scores = []
+    all_test_predictions = []
+    all_test_labels = [] #they have the original ordering of the data, but this might change if <cross_validation_split> changes
     
     if use_matrix_based_implementation:
         fn_build_model   = fingerprint_model_matrix_based.build_fingerprint_regression_model
@@ -334,12 +354,14 @@ def crossvalidation_example(use_matrix_based_implementation = False, plot_traini
         
 
         
-        model, (train_scores_at_valbest, val_scores_best, test_scores_at_valbest), train_valid_mse_per_epoch = train_model(model, train, valid_data, test_data, 
+        model, (train_scores_at_valbest, val_scores_best, test_scores_at_valbest), train_valid_mse_per_epoch, test_predictions = train_model(model, train, valid_data, test_data, 
                                      batchsize = batchsize, num_epochs = num_epochs, train=1)
         train_mse.append(train_scores_at_valbest['mse'])
         val_mse.append(val_scores_best['mse'])
         test_mse.append(test_scores_at_valbest['mse'])
         test_scores.append(test_scores_at_valbest)
+        all_test_predictions.append(test_predictions[:,0])
+        all_test_labels.append(np.concatenate(map(lambda x:x[-1],test_data)))
         
         if plot_training_mse:
             plot_training_mse_evolution(train_valid_mse_per_epoch, ['training set MSE (+regularizer)', 'validation set MSE'])
@@ -348,7 +370,7 @@ def crossvalidation_example(use_matrix_based_implementation = False, plot_traini
                 warnings.simplefilter("ignore")
                 pyplot.pause(0.0001)
     
-        
+    parity_plot(np.concatenate(all_test_predictions), np.concatenate(all_test_labels))
     
     
 
@@ -380,6 +402,8 @@ if __name__=='__main__':
     
     plot_training_mse = 0
     
+    # Two implementations are available (they are equivalent): index_based and matrix_based. 
+    # The index_based one is usually slightly faster.    
     
     model = crossvalidation_example(use_matrix_based_implementation=0, plot_training_mse = plot_training_mse)
     
